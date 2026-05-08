@@ -1,0 +1,34 @@
+# E4B Full SFT - Oracle Teaching
+# alignment-handbook style config for TRL SFTTrainer
+
+# Model
+model_name_or_path: google/gemma-4-E4B-it
+torch_dtype: bfloat16
+
+# Data
+dataset_path: /abr/coss36/bayesian-teaching/data/original/data/train/oracle.jsonl
+max_seq_length: 2048
+preprocessing_num_workers: 12
+
+# Training
+bf16: true
+do_eval: false
+gradient_accumulation_steps: 5
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+learning_rate: 2.0e-6
+log_level: info
+logging_steps: 10
+logging_strategy: steps
+lr_scheduler_type: cosine
+num_train_epochs: 1
+output_dir: /abr/coss36/bayesian-teaching/models/e4b-full-oracle
+overwrite_output_dir: true
+per_device_train_batch_size: 4
+save_strategy: steps
+save_steps: 200
+save_total_limit: 3
+seed: 42
+warmup_ratio: 0.1
+report_to: none

@@ -1,0 +1,30 @@
+# Data (download separately from Zenodo)
+data/original/
+
+# Trained models (large files)
+models/
+
+# Results and figures (generated)
+results/
+figures/
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Conda/venv
+.env/
+venv/
