@@ -102,38 +102,46 @@ def main():
     logger.info(f"Dataset ready: {len(dataset)} examples with 'messages' column")
 
     # Build SFTConfig from YAML config
-    sft_config = SFTConfig(
-        output_dir=config["output_dir"],
-        max_length=config.get("max_seq_length", 2048),
+    # Only pass parameters compatible with TRL >= 1.0 API
+    sft_config_kwargs = {
+        "output_dir": config["output_dir"],
+        "max_length": config.get("max_seq_length", 2048),
         # Training hyperparameters
-        per_device_train_batch_size=config.get("per_device_train_batch_size", 4),
-        gradient_accumulation_steps=config.get("gradient_accumulation_steps", 5),
-        learning_rate=config.get("learning_rate", 2e-6),
-        num_train_epochs=config.get("num_train_epochs", 1),
-        warmup_ratio=config.get("warmup_ratio", 0.1),
-        lr_scheduler_type=config.get("lr_scheduler_type", "cosine"),
+        "per_device_train_batch_size": config.get("per_device_train_batch_size", 4),
+        "gradient_accumulation_steps": config.get("gradient_accumulation_steps", 5),
+        "learning_rate": config.get("learning_rate", 2e-6),
+        "num_train_epochs": config.get("num_train_epochs", 1),
+        "warmup_ratio": config.get("warmup_ratio", 0.1),
+        "lr_scheduler_type": config.get("lr_scheduler_type", "cosine"),
         # Precision
-        bf16=config.get("bf16", True),
+        "bf16": config.get("bf16", True),
         # Logging
-        logging_steps=config.get("logging_steps", 10),
-        logging_strategy=config.get("logging_strategy", "steps"),
-        log_level=config.get("log_level", "info"),
+        "logging_steps": config.get("logging_steps", 10),
+        "logging_strategy": config.get("logging_strategy", "steps"),
         # Saving
-        save_strategy=config.get("save_strategy", "steps"),
-        save_steps=config.get("save_steps", 200),
-        save_total_limit=config.get("save_total_limit", 3),
+        "save_strategy": config.get("save_strategy", "steps"),
+        "save_steps": config.get("save_steps", 200),
+        "save_total_limit": config.get("save_total_limit", 3),
         # Other
-        seed=seed,
-        overwrite_output_dir=config.get("overwrite_output_dir", True),
-        do_eval=config.get("do_eval", False),
-        report_to=config.get("report_to", "none"),
-        dataloader_num_workers=config.get("preprocessing_num_workers", 4),
+        "seed": seed,
+        "report_to": config.get("report_to", "none"),
+        "dataloader_num_workers": config.get("preprocessing_num_workers", 4),
         # Gradient checkpointing
-        gradient_checkpointing=config.get("gradient_checkpointing", True),
-        gradient_checkpointing_kwargs=config.get(
+        "gradient_checkpointing": config.get("gradient_checkpointing", True),
+        "gradient_checkpointing_kwargs": config.get(
             "gradient_checkpointing_kwargs", {"use_reentrant": False}
         ),
-    )
+    }
+
+    # Filter out parameters not supported by this version of SFTConfig
+    import inspect
+    supported_params = set(inspect.signature(SFTConfig.__init__).parameters.keys())
+    filtered_kwargs = {k: v for k, v in sft_config_kwargs.items() if k in supported_params}
+    removed = set(sft_config_kwargs.keys()) - set(filtered_kwargs.keys())
+    if removed:
+        logger.warning(f"SFTConfig: dropped unsupported params: {removed}")
+
+    sft_config = SFTConfig(**filtered_kwargs)
 
     # Create trainer - SFTTrainer will apply chat template to 'messages' column
     trainer = SFTTrainer(
