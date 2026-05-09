@@ -6,7 +6,7 @@ model_name_or_path: google/gemma-4-E4B-it
 torch_dtype: bfloat16
 
 # Data
-dataset_path: /abr/coss36/bayesian-teaching/data/original/data/train/oracle.jsonl
+dataset_path: /home/sdh/Bayesian-teaching-Gemma-4-E4B/data/train/oracle.jsonl
 max_seq_length: 2048
 preprocessing_num_workers: 12
 
@@ -23,7 +23,7 @@ logging_steps: 10
 logging_strategy: steps
 lr_scheduler_type: cosine
 num_train_epochs: 1
-output_dir: /abr/coss36/bayesian-teaching/models/e4b-full-oracle
+output_dir: /home/sdh/Bayesian-teaching-Gemma-4-E4B/models/e4b-full-oracle
 overwrite_output_dir: true
 per_device_train_batch_size: 4
 save_strategy: steps
