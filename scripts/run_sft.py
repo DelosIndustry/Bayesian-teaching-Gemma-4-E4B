@@ -104,7 +104,7 @@ def main():
     # Build SFTConfig from YAML config
     sft_config = SFTConfig(
         output_dir=config["output_dir"],
-        max_seq_length=config.get("max_seq_length", 2048),
+        max_length=config.get("max_seq_length", 2048),
         # Training hyperparameters
         per_device_train_batch_size=config.get("per_device_train_batch_size", 4),
         gradient_accumulation_steps=config.get("gradient_accumulation_steps", 5),
