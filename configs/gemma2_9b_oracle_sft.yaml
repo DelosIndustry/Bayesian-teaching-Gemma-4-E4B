@@ -1,0 +1,36 @@
+# Gemma 2 9B Full SFT - Oracle Teaching (Reproducing Qiu et al. 2025)
+# Control condition to compare against Bayesian teaching.
+
+# Model
+model_name_or_path: google/gemma-2-9b-it
+torch_dtype: bfloat16
+
+# Data
+dataset_path: /home/sdh/Bayesian-teaching-Gemma-4-E4B/data/train/oracle.jsonl
+max_seq_length: 2048
+preprocessing_num_workers: 12
+
+# Training
+bf16: true
+deepspeed: configs/ds_zero3_config.json
+do_eval: false
+gradient_accumulation_steps: 20
+gradient_checkpointing: true
+gradient_checkpointing_kwargs:
+  use_reentrant: false
+learning_rate: 2.0e-6
+log_level: info
+logging_steps: 10
+logging_strategy: steps
+lr_scheduler_type: cosine
+num_train_epochs: 1
+output_dir: /home/sdh/Bayesian-teaching-Gemma-4-E4B/models/gemma2-9b-oracle
+overwrite_output_dir: true
+per_device_train_batch_size: 1
+assistant_only_loss: true
+save_strategy: steps
+save_steps: 200
+save_total_limit: 3
+seed: 42
+warmup_ratio: 0.1
+report_to: none

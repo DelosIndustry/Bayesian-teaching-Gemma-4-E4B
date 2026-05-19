@@ -7,13 +7,15 @@ torch_dtype: bfloat16
 
 # Data
 dataset_path: /home/sdh/Bayesian-teaching-Gemma-4-E4B/data/train/oracle.jsonl
-max_seq_length: 2048
+max_seq_length: 1024
 preprocessing_num_workers: 12
 
 # Training
 bf16: true
+deepspeed: configs/ds_zero3_config.json
+chat_template_path: configs/gemma4_e4b_training_chat_template.jinja
 do_eval: false
-gradient_accumulation_steps: 5
+gradient_accumulation_steps: 20
 gradient_checkpointing: true
 gradient_checkpointing_kwargs:
   use_reentrant: false
@@ -25,7 +27,9 @@ lr_scheduler_type: cosine
 num_train_epochs: 1
 output_dir: /home/sdh/Bayesian-teaching-Gemma-4-E4B/models/e4b-full-oracle
 overwrite_output_dir: true
-per_device_train_batch_size: 4
+per_device_train_batch_size: 1
+assistant_only_loss: true
+freeze_embeddings: true
 save_strategy: steps
 save_steps: 200
 save_total_limit: 3

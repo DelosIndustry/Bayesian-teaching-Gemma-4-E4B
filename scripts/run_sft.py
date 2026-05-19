@@ -78,12 +78,27 @@ def main():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    logger.info(f"Loading model: {model_name} (dtype={torch_dtype})")
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch_dtype,
-        attn_implementation="eager",
-    )
+    # If a custom chat template is specified in the config, override the
+    # tokenizer's default. This is REQUIRED for Gemma 4 E4B with
+    # `assistant_only_loss=True`: the model's default chat template lacks
+    # the `{% generation %}` markers TRL needs to identify assistant tokens,
+    # and TRL's auto-patcher does not recognize the new Gemma 4 template.
+    # We provide a minimal training-compatible template that produces output
+    # byte-identical to the original for plain user/assistant conversations.
+    chat_template_path = config.get("chat_template_path")
+    if chat_template_path:
+        with open(chat_template_path) as f:
+            tokenizer.chat_template = f.read()
+        logger.info(f"Overrode chat template from {chat_template_path}")
+
+    # NOTE: Model loading is deferred until AFTER SFTConfig is instantiated,
+    # AND SFTConfig must receive a non-None `deepspeed=<path>` argument.
+    # Only when `TrainingArguments.deepspeed` is set does __post_init__
+    # construct HfTrainerDeepSpeedConfig, which registers the ZeRO-3 config
+    # in the weakref that `is_deepspeed_zero3_enabled()` consults. Only then
+    # does from_pretrained wrap parameter creation with deepspeed.zero.Init()
+    # and shard parameters across ranks at creation time. Setting DeepSpeed
+    # only via the accelerate config file is NOT sufficient for this hook.
 
     # Load dataset from local JSONL path specified in config
     dataset_path = config["dataset_path"]
@@ -131,6 +146,19 @@ def main():
         "gradient_checkpointing_kwargs": config.get(
             "gradient_checkpointing_kwargs", {"use_reentrant": False}
         ),
+        # DeepSpeed: passing the path here is what triggers transformers to
+        # instantiate HfTrainerDeepSpeedConfig inside SFTConfig.__post_init__,
+        # which in turn registers the ZeRO-3 config in the weakref consulted
+        # by AutoModelForCausalLM.from_pretrained -> is_deepspeed_zero3_enabled.
+        # Without this, from_pretrained never wraps parameter creation with
+        # deepspeed.zero.Init(), so every rank loads the full ~14.8 GiB bf16
+        # model and OOMs during optimizer construction.
+        "deepspeed": config.get("deepspeed", None),
+        # Loss masking: only compute loss on assistant tokens.
+        # Critical for chat-style SFT — without this, the model wastes
+        # capacity learning to predict user prompt tokens instead of
+        # learning the actual reasoning task.
+        "assistant_only_loss": config.get("assistant_only_loss", True),
     }
 
     # Filter out parameters not supported by this version of SFTConfig
@@ -142,6 +170,35 @@ def main():
         logger.warning(f"SFTConfig: dropped unsupported params: {removed}")
 
     sft_config = SFTConfig(**filtered_kwargs)
+
+    # Load model AFTER SFTConfig so that ZeRO-3 param init hook is active.
+    # When DeepSpeed ZeRO-3 is configured (detected via is_deepspeed_zero3_enabled),
+    # from_pretrained wraps parameter creation in deepspeed.zero.Init(), which
+    # shards each parameter across all ranks immediately. Without this ordering
+    # each rank materializes the full model and then OOMs.
+    logger.info(f"Loading model: {model_name} (dtype={torch_dtype})")
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch_dtype,
+        attn_implementation="eager",
+    )
+
+    # Optional: freeze embedding layer to skip its huge gradient.
+    # Gemma 4 E4B has a 262K-token vocab × 2560 hidden, producing a 2.7 GiB
+    # bf16 gradient. DeepSpeed ZeRO-3 then upcasts it to fp64 for L2 norm
+    # computation, demanding ~5 GiB peaks per backward, which OOMs A5000s.
+    # Freezing the embedding eliminates this gradient entirely. SFT for a
+    # narrow domain like flight selection rarely needs to update the
+    # pretrained vocabulary embeddings, so this is a standard memory-saving
+    # technique with negligible quality impact.
+    if config.get("freeze_embeddings", False):
+        n_frozen = 0
+        for name, param in model.named_parameters():
+            if "embed" in name.lower():
+                param.requires_grad = False
+                n_frozen += param.numel()
+                logger.info(f"Froze: {name} ({param.shape})")
+        logger.info(f"Frozen embedding params: {n_frozen / 1e9:.2f} B")
 
     # Create trainer - SFTTrainer will apply chat template to 'messages' column
     trainer = SFTTrainer(

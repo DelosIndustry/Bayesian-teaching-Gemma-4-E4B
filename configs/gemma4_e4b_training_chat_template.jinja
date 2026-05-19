@@ -1,0 +1,19 @@
+{#- Simplified training-compatible chat template for Gemma 4 E4B.
+    Preserves E4B's native <|turn>...<turn|> token format (matches pretraining
+    distribution) while adding {% generation %} markers around assistant
+    content to support assistant_only_loss in TRL.
+-#}
+{{ bos_token }}
+{%- for message in messages -%}
+{%- if (message['role'] == 'user') != (loop.index0 % 2 == 0) -%}
+{{ raise_exception("Conversation roles must alternate user/assistant/user/assistant/...") }}
+{%- endif -%}
+{%- if message['role'] == 'assistant' -%}
+{{ '<|turn>model\n' }}{%- generation -%}{{ message['content'] | trim }}{{ '<turn|>\n' }}{%- endgeneration -%}
+{%- else -%}
+{{ '<|turn>' + message['role'] + '\n' + (message['content'] | trim) + '<turn|>\n' }}
+{%- endif -%}
+{%- endfor -%}
+{%- if add_generation_prompt -%}
+{{'<|turn>model\n'}}
+{%- endif -%}
