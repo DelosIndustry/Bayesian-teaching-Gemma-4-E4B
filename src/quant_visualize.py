@@ -16,10 +16,64 @@ import numpy as np  # noqa: E402
 
 from src.quant_analysis import ConditionKey, atomic_write_json
 
-TEACHING_COLORS = {"bayesian": "#4C78A8", "oracle": "#F58518"}
-QUANT_STYLES = {"bf16": "-", "int8": "--", "int4": ":"}
+# Okabe-Ito inspired, print-friendly colors.
+TEACHING_COLORS = {"bayesian": "#0072B2", "oracle": "#D55E00"}
+QUANT_STYLES = {"bf16": "-", "int8": "--", "int4": "-."}
+QUANT_MARKERS = {"bf16": "o", "int8": "s", "int4": "^"}
 QUANT_ORDER = ["bf16", "int8", "int4"]
 TEACHING_ORDER = ["bayesian", "oracle"]
+TEACHING_LABELS = {"bayesian": "Bayesian", "oracle": "Oracle"}
+QUANT_LABELS = {"bf16": "BF16", "int8": "INT8", "int4": "INT4"}
+
+
+def _set_paper_style() -> None:
+    """Use compact, publication-oriented matplotlib defaults."""
+    plt.rcParams.update(
+        {
+            "figure.dpi": 130,
+            "savefig.dpi": 450,
+            "font.size": 9,
+            "axes.titlesize": 10,
+            "axes.labelsize": 9,
+            "xtick.labelsize": 8,
+            "ytick.labelsize": 8,
+            "legend.fontsize": 8,
+            "axes.linewidth": 0.8,
+            "axes.edgecolor": "#333333",
+            "axes.titleweight": "semibold",
+            "grid.color": "#D8D8D8",
+            "grid.linewidth": 0.6,
+            "grid.alpha": 0.8,
+            "pdf.fonttype": 42,
+            "ps.fonttype": 42,
+        }
+    )
+
+
+def _style_axes(ax, *, grid_axis: str = "y") -> None:
+    """Apply clean paper-style axes."""
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#333333")
+    ax.spines["bottom"].set_color("#333333")
+    ax.tick_params(axis="both", colors="#333333", width=0.8, length=3)
+    ax.grid(True, axis=grid_axis)
+    ax.set_axisbelow(True)
+
+
+def _annotate_bars(ax, bars, *, dy: float = 0.006) -> None:
+    for bar in bars:
+        height = bar.get_height()
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            height + dy,
+            f"{height:.3f}",
+            ha="center",
+            va="bottom",
+            fontsize=7,
+            color="#333333",
+            rotation=0,
+        )
 
 
 def _rounds(record: dict[str, Any]) -> list[float]:
@@ -52,7 +106,8 @@ def make_learning_curves_figure(
     by_cond: dict[ConditionKey, dict[str, Any]], domain: str = "flight"
 ):
     """Create a 6-line learning-curve figure for one domain."""
-    fig, ax = plt.subplots(figsize=(6.6, 4.1))
+    _set_paper_style()
+    fig, ax = plt.subplots(figsize=(6.1, 3.55))
     for teaching in TEACHING_ORDER:
         for quant in QUANT_ORDER:
             record = by_cond.get((teaching, quant, domain))
@@ -65,24 +120,42 @@ def make_learning_curves_figure(
                 ys,
                 color=TEACHING_COLORS[teaching],
                 linestyle=QUANT_STYLES[quant],
-                marker="o",
-                linewidth=2.0,
-                label=f"{teaching.title()} {quant}",
+                marker=QUANT_MARKERS[quant],
+                markersize=5.2,
+                markerfacecolor="white",
+                markeredgewidth=1.2,
+                linewidth=2.1,
+                label=f"{TEACHING_LABELS[teaching]}-{QUANT_LABELS[quant]}",
             )
-    ax.set_title(f"Learning Curves ({domain.title()})")
-    ax.set_xlabel("Round")
-    ax.set_ylabel("Round Accuracy")
+    ax.set_title(f"Interaction Learning Curves ({domain.title()})", pad=8)
+    ax.set_xlabel("Interaction round")
+    ax.set_ylabel("Accuracy")
     ax.set_xticks([1, 2, 3, 4, 5])
-    ax.set_ylim(0.0, 1.0)
-    ax.grid(True, alpha=0.25)
-    ax.legend(frameon=False, fontsize=8, ncol=2)
+    ax.set_ylim(0.32, 0.75)
+    ax.set_yticks(np.arange(0.35, 0.76, 0.10))
+    _style_axes(ax, grid_axis="y")
+    ax.legend(
+        frameon=True,
+        fancybox=False,
+        edgecolor="#D0D0D0",
+        facecolor="white",
+        framealpha=0.95,
+        ncol=3,
+        loc="upper left",
+        bbox_to_anchor=(0.0, 1.02),
+        borderaxespad=0.0,
+        handlelength=2.2,
+        columnspacing=1.0,
+    )
+    fig.tight_layout()
     return fig
 
 
 def make_r5_le_bar_figure(by_cond: dict[ConditionKey, dict[str, Any]]):
     """Create a two-panel R5 and Learning Effect bar chart."""
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.8), sharey=False)
-    width = 0.36
+    _set_paper_style()
+    fig, axes = plt.subplots(1, 2, figsize=(6.6, 3.45), sharey=False)
+    width = 0.34
     x = np.arange(len(QUANT_ORDER))
     domain = "flight"
     if by_cond:
@@ -96,46 +169,77 @@ def make_r5_le_bar_figure(by_cond: dict[ConditionKey, dict[str, Any]]):
             r5, le = _r5_le(record)
             r5_values.append(r5)
             le_values.append(le)
-        axes[0].bar(
+        bars_r5 = axes[0].bar(
             x + offset,
             r5_values,
             width,
-            label=teaching.title(),
+            label=TEACHING_LABELS[teaching],
             color=TEACHING_COLORS[teaching],
+            edgecolor="#222222",
+            linewidth=0.55,
+            alpha=0.92,
         )
-        axes[1].bar(
+        bars_le = axes[1].bar(
             x + offset,
             le_values,
             width,
-            label=teaching.title(),
+            label=TEACHING_LABELS[teaching],
             color=TEACHING_COLORS[teaching],
+            edgecolor="#222222",
+            linewidth=0.55,
+            alpha=0.92,
         )
+        _annotate_bars(axes[0], bars_r5, dy=0.008)
+        _annotate_bars(axes[1], bars_le, dy=0.006)
 
     for ax, title, ylabel in (
-        (axes[0], "R5 Accuracy", "Accuracy"),
-        (axes[1], "Learning Effect", "R5 - R1"),
+        (axes[0], "Final Accuracy (R5)", "Accuracy"),
+        (axes[1], "Learning Effect (R5 - R1)", "Accuracy gain"),
     ):
-        ax.set_title(title)
+        ax.set_title(title, pad=8)
         ax.set_xlabel("Quantization")
-        ax.set_xticks(x, QUANT_ORDER)
+        ax.set_xticks(x, [QUANT_LABELS[q] for q in QUANT_ORDER])
         ax.set_ylabel(ylabel)
-        ax.grid(axis="y", alpha=0.25)
-    axes[0].set_ylim(0.0, 1.0)
-    axes[1].legend(frameon=False, fontsize=8)
-    fig.tight_layout()
+        _style_axes(ax, grid_axis="y")
+    axes[0].set_ylim(0.0, 0.80)
+    axes[1].set_ylim(0.0, 0.38)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(
+        handles,
+        labels,
+        frameon=True,
+        fancybox=False,
+        edgecolor="#D0D0D0",
+        facecolor="white",
+        framealpha=0.95,
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.04),
+        ncol=2,
+        columnspacing=1.4,
+    )
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
     return fig
 
 
 def make_scatter_per_user_efficiency(bayesian_eff, oracle_eff):
     """Create Bayesian-vs-Oracle per-user efficiency scatter."""
+    _set_paper_style()
     bayes = np.asarray(bayesian_eff, dtype=float)
     oracle = np.asarray(oracle_eff, dtype=float)
     n = min(bayes.size, oracle.size)
     bayes = bayes[:n]
     oracle = oracle[:n]
 
-    fig, ax = plt.subplots(figsize=(4.4, 4.2))
-    ax.scatter(bayes, oracle, s=18, alpha=0.7, color="#54A24B")
+    fig, ax = plt.subplots(figsize=(4.25, 4.05))
+    ax.scatter(
+        bayes,
+        oracle,
+        s=22,
+        alpha=0.62,
+        color="#009E73",
+        edgecolor="white",
+        linewidth=0.35,
+    )
     if n:
         lo = float(min(bayes.min(), oracle.min()))
         hi = float(max(bayes.max(), oracle.max()))
@@ -144,17 +248,40 @@ def make_scatter_per_user_efficiency(bayesian_eff, oracle_eff):
     if lo == hi:
         lo -= 0.1
         hi += 0.1
-    ax.plot([lo, hi], [lo, hi], color="#666666", linewidth=1.2, linestyle="--")
-    ax.set_title("Per-User Sample Efficiency")
-    ax.set_xlabel("Bayesian Efficiency")
-    ax.set_ylabel("Oracle Efficiency")
-    ax.grid(True, alpha=0.25)
+    pad = max((hi - lo) * 0.04, 0.03)
+    lo -= pad
+    hi += pad
+    ax.plot([lo, hi], [lo, hi], color="#4D4D4D", linewidth=1.2, linestyle="--")
+    ax.fill_between([lo, hi], [lo, hi], [lo, lo], color="#0072B2", alpha=0.06)
+    ax.text(
+        lo + (hi - lo) * 0.05,
+        lo + (hi - lo) * 0.90,
+        "Oracle > Bayesian",
+        fontsize=7.5,
+        color="#666666",
+    )
+    ax.text(
+        lo + (hi - lo) * 0.52,
+        lo + (hi - lo) * 0.08,
+        "Bayesian > Oracle",
+        fontsize=7.5,
+        color="#666666",
+    )
+    ax.set_title("Per-User Sample Efficiency", pad=8)
+    ax.set_xlabel("Bayesian efficiency")
+    ax.set_ylabel("Oracle efficiency")
+    ax.set_xlim(lo, hi)
+    ax.set_ylim(lo, hi)
+    ax.set_aspect("equal", adjustable="box")
+    _style_axes(ax, grid_axis="both")
+    fig.tight_layout()
     return fig
 
 
 def make_cross_domain_robustness_figure(robustness_flight, robustness_hotel):
     """Create an optional Flight-vs-Hotel robustness comparison."""
-    fig, axes = plt.subplots(1, 2, figsize=(7.2, 3.8), sharey=True)
+    _set_paper_style()
+    fig, axes = plt.subplots(1, 2, figsize=(6.6, 3.45), sharey=True)
     width = 0.36
     x = np.arange(len(QUANT_ORDER[1:]))
     for ax, teaching in zip(axes, TEACHING_ORDER):
@@ -168,14 +295,21 @@ def make_cross_domain_robustness_figure(robustness_flight, robustness_hotel):
                     f"{teaching}_{quant}_{domain}", {}
                 )
                 values.append(float(row.get("delta_LE", 0.0)))
-            ax.bar(x + offset, values, width, label=domain.title())
-        ax.set_title(teaching.title())
+            ax.bar(
+                x + offset,
+                values,
+                width,
+                label=domain.title(),
+                edgecolor="#222222",
+                linewidth=0.55,
+            )
+        ax.set_title(TEACHING_LABELS[teaching], pad=8)
         ax.set_xlabel("Quantization")
-        ax.set_xticks(x, QUANT_ORDER[1:])
-        ax.grid(axis="y", alpha=0.25)
-    axes[0].set_ylabel("Delta LE")
-    axes[1].legend(frameon=False, fontsize=8)
-    fig.suptitle("Cross-Domain Robustness")
+        ax.set_xticks(x, [QUANT_LABELS[q] for q in QUANT_ORDER[1:]])
+        _style_axes(ax, grid_axis="y")
+    axes[0].set_ylabel("$\\Delta$LE")
+    axes[1].legend(frameon=True, fancybox=False, edgecolor="#D0D0D0")
+    fig.suptitle("Cross-Domain Robustness", fontsize=10, fontweight="semibold")
     fig.tight_layout()
     return fig
 
@@ -193,7 +327,7 @@ def save_figures(figures: list[tuple[str, Any]], out_dir: Path) -> None:
             for ext in ("pdf", "png"):
                 final = out_dir / f"{name}.{ext}"
                 tmp = out_dir / f".{name}.{ext}.tmp.{ext}"
-                fig.savefig(tmp, dpi=300, bbox_inches="tight")
+                fig.savefig(tmp, dpi=450, bbox_inches="tight", facecolor="white")
                 tmp_paths.append((tmp, final))
         for tmp, final in tmp_paths:
             os.replace(tmp, final)
